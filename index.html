@@ -3,62 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimapa Exclusivo Tripu1404</title>
+    <title>Minimapa - Servidor Anarquía</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: #121212; color: #fff; }
-        #navbar { display: flex; background: #1a1a1a; padding: 12px; gap: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); align-items: center; }
-        #navbar h2 { margin: 0; font-size: 18px; color: gold; margin-right: 20px; }
-        .btn-dim { color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; transition: 0.3s; background: #333; }
-        #btn-overworld:hover, #btn-overworld.active { background: #4caf50; }
-        #btn-nether:hover, #btn-nether.active { background: #f44336; }
-        #btn-end:hover, #btn-end.active { background: #9c27b0; }
-        #map { width: 100vw; height: calc(100vh - 56px); background: #0f0f0f; }
-        .player-head { border: 2px solid #fff; border-radius: 4px; box-shadow: 0 0 8px gold; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #111;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .interface-layer {
+            position: absolute;
+            zIndex: 1000;
+            pointer-events: none;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        #dimension-selector {
+            top: 20px;
+            right: 20px;
+            background: rgba(20, 20, 20, 0.85);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .btn-dim {
+            display: block;
+            width: 120px;
+            padding: 8px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: transform 0.2s, filter 0.2s;
+        }
+        .btn-dim:hover {
+            transform: scale(1.05);
+            filter: brightness(1.2);
+        }
+        #btn-overworld { background: #2e7d32; }
+        #btn-nether { background: #c62828; }
+        #btn-end { background: #6a1b9a; }
+        
+        .player-head {
+            border: 2px solid #fff;
+            border-radius: 4px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.8);
+            background: #222;
+        }
     </style>
 </head>
 <body>
 
-    <div id="navbar">
-        <h2>NUKKIT MINIMAP</h2>
-        <a href="?world=overworld" class="btn-dim" id="btn-overworld">Overworld</a>
-        <a href="?world=nether" class="btn-dim" id="btn-nether">Nether</a>
-        <a href="?world=end" class="btn-dim" id="btn-end">End</a>
+    <div id="dimension-selector" class="interface-layer interactive">
+        <button id="btn-overworld" class="btn-dim" onclick="changeDimension('overworld')">Overworld</button>
+        <button id="btn-nether" class="btn-dim" onclick="changeDimension('nether')">The Nether</button>
+        <button id="btn-end" class="btn-dim" onclick="changeDimension('end')">The End</button>
     </div>
 
     <div id="map"></div>
 
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // CONFIGURACIÓN ASOCIADA: Cambia TU_IP_PUBLICA por la de tu host
-        const SERVER_IP = "173.237.38.116:21414"; 
-        const API_TOKEN = "MiClaveSecretaSuperSegura123!";
+        let currentWorld = 'overworld';
+        const DATA_URL = "data.json";
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const currentWorld = urlParams.get('world') || 'overworld';
-        document.getElementById(`btn-${currentWorld}`).classList.add('active');
-
+        // Inicializar mapa usando un sistema de coordenadas plano (fácil de adaptar a Minecraft)
         const map = L.map('map', {
             crs: L.CRS.Simple,
             minZoom: -3,
-            maxZoom: 4,
-            attributionControl: false
-        }).setView([0, 0], 1);
+            maxZoom: 3,
+            zoomControl: false
+        }).setView([0, 0], 0);
 
+        L.control.zoom({ position: 'topleft' }).addTo(map);
+
+        // Capas dedicadas para limpiar el mapa fácilmente al actualizar
         const terrainLayer = L.layerGroup().addTo(map);
         const playersLayer = L.layerGroup().addTo(map);
 
+        function changeDimension(dimension) {
+            currentWorld = dimension;
+            loadTerrain();
+            updatePlayers();
+        }
+
         async function loadTerrain() {
             try {
-                const response = await fetch(`http://${SERVER_IP}/api/map?world=${currentWorld}`, {
-                    method: 'GET',
-                    headers: { 'X-Map-Token': API_TOKEN }
-                });
-                const data = await response.json();
+                const response = await fetch(DATA_URL + "?t=" + new Date().getTime());
+                if (!response.ok) return;
+                const fullData = await response.json();
+                
+                const blocks = fullData[currentWorld] || [];
                 terrainLayer.clearLayers();
 
-                data.blocks.forEach(block => {
+                blocks.forEach(block => {
                     const [x, z, color] = block;
+                    // En Leaflet Plano, se asigna [Y, X]. Mapeamos Z de Minecraft al eje Y del mapa.
                     L.rectangle([[z, x], [z + 3, x + 3]], {
                         color: color,
                         weight: 0,
@@ -67,17 +122,17 @@
                     }).addTo(terrainLayer);
                 });
             } catch (err) {
-                console.error("Error de conexión o denegado por CORS/Token.", err);
+                console.error("Esperando a que el servidor genere el archivo data.json...", err);
             }
         }
 
         async function updatePlayers() {
             try {
-                const response = await fetch(`http://${SERVER_IP}/api/players`, {
-                    method: 'GET',
-                    headers: { 'X-Map-Token': API_TOKEN }
-                });
-                const players = await response.json();
+                const response = await fetch(DATA_URL + "?t=" + new Date().getTime());
+                if (!response.ok) return;
+                const fullData = await response.json();
+                
+                const players = fullData.players || [];
                 playersLayer.clearLayers();
 
                 players.forEach(player => {
@@ -93,10 +148,9 @@
 
                     const marker = L.marker([player.z, player.x], { icon: playerIcon });
                     
-                    // Si las coordenadas o nombres están ocultos en config.yml llegarán vacíos
                     marker.bindPopup(`
-                        <div style="color:#000; font-family:sans-serif;">
-                            <b style="font-size:14px;">${player.name || "Jugador Oculto"}</b><br><hr style="border:0;border-top:1px solid #ccc;">
+                        <div style="color:#000; font-family:sans-serif; min-width:120px;">
+                            <b style="font-size:14px; color:#111;">${player.name}</b><br><hr style="border:0;border-top:1px solid #ddd; margin:4px 0;">
                             <b>X:</b> ${player.x}<br>
                             <b>Y:</b> ${player.y}<br>
                             <b>Z:</b> ${player.z}
@@ -105,14 +159,16 @@
                     playersLayer.addLayer(marker);
                 });
             } catch (err) {
-                console.log("No autorizado.");
+                // Falla silenciosa si el JSON está ocupado escribiéndose
             }
         }
 
+        // Bucles de refresco visual
         loadTerrain();
         updatePlayers();
-        setInterval(updatePlayers, 2000);
-        setInterval(loadTerrain, 30000);
+        
+        setInterval(loadTerrain, 15000); // Lee los bloques nuevos cada 15 segundos
+        setInterval(updatePlayers, 5000);  // Actualiza los marcadores de jugadores cada 5 segundos
     </script>
 </body>
 </html>
