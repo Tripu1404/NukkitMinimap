@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimapa del Servidor de Anarquía</title>
+    <title>Minimapa Protegido Anarquía</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #fff; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; background: #121212; color: #fff; }
         #navbar { display: flex; background: #1a1a1a; padding: 12px; gap: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); align-items: center; }
         #navbar h2 { margin: 0; font-size: 18px; color: gold; margin-right: 20px; }
         .btn-dim { color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; transition: 0.3s; background: #333; }
@@ -30,15 +30,13 @@
     <div id="map"></div>
 
     <script>
-        // CONFIGURACIÓN: Cambia esto por la IP pública de tu VPS o servidor casero
         const SERVER_IP = "TU_IP_PUBLICA:8080"; 
+        const API_TOKEN = "MiClaveSecretaSuperSegura123!";
 
-        // Leer dimensión de la URL (?world=nether)
         const urlParams = new URLSearchParams(window.location.search);
         const currentWorld = urlParams.get('world') || 'overworld';
         document.getElementById(`btn-${currentWorld}`).classList.add('active');
 
-        // Configuración de Leaflet con coordenadas 2D planas (Minecraft X / Z)
         const map = L.map('map', {
             crs: L.CRS.Simple,
             minZoom: -3,
@@ -49,17 +47,20 @@
         const terrainLayer = L.layerGroup().addTo(map);
         const playersLayer = L.layerGroup().addTo(map);
 
-        // 1. Cargar el mapa desde la API de Nukkit
         async function loadTerrain() {
             try {
-                const response = await fetch(`http://${SERVER_IP}/api/map?world=${currentWorld}`);
+                const response = await fetch(`http://${SERVER_IP}/api/map?world=${currentWorld}`, {
+                    method: 'GET',
+                    headers: {
+                        'X-Map-Token': API_TOKEN
+                    }
+                });
                 const data = await response.json();
                 
                 terrainLayer.clearLayers();
 
                 data.blocks.forEach(block => {
                     const [x, z, color] = block;
-                    // Leaflet procesa [Z, X] como coordenadas [Latitud, Longitud]
                     L.rectangle([[z, x], [z + 3, x + 3]], {
                         color: color,
                         weight: 0,
@@ -68,14 +69,18 @@
                     }).addTo(terrainLayer);
                 });
             } catch (err) {
-                console.error("Error de conexión con la API del mapa de Nukkit.", err);
+                console.error("Error cargando mapa o acceso denegado por seguridad.", err);
             }
         }
 
-        // 2. Cargar jugadores y renderizar sus skins en tiempo real
         async function updatePlayers() {
             try {
-                const response = await fetch(`http://${SERVER_IP}/api/players`);
+                const response = await fetch(`http://${SERVER_IP}/api/players`, {
+                    method: 'GET',
+                    headers: {
+                        'X-Map-Token': API_TOKEN
+                    }
+                });
                 const players = await response.json();
                 
                 playersLayer.clearLayers();
@@ -83,7 +88,6 @@
                 players.forEach(player => {
                     if (player.world !== currentWorld) return;
 
-                    // API Crafatar gratuita para extraer la cara 2D usando el UUID del jugador
                     const skinHeadUrl = `https://crafatar.com/avatars/${player.uuid}?size=32&overlay`;
                     
                     const playerIcon = L.icon({
@@ -95,7 +99,6 @@
 
                     const marker = L.marker([player.z, player.x], { icon: playerIcon });
                     
-                    // Contenido interactivo al hacer click sobre la cara
                     marker.bindPopup(`
                         <div style="color:#000; font-family:sans-serif;">
                             <b style="font-size:14px;">${player.name}</b><br><hr style="border:0;border-top:1px solid #ccc;">
@@ -108,17 +111,14 @@
                     playersLayer.addLayer(marker);
                 });
             } catch (err) {
-                console.log("Esperando respuesta de datos de jugadores...");
+                console.log("No se pudieron verificar los datos de posicionamiento.");
             }
         }
 
-        // Bucles de ejecución
         loadTerrain();
         updatePlayers();
 
-        // Refrescar posiciones cada 2 segundos (Tiempo real suave)
         setInterval(updatePlayers, 2000);
-        // Refrescar el mapa completo cada 30 segundos para sincronizar grandes bloques puestos
         setInterval(loadTerrain, 30000);
     </script>
 </body>
