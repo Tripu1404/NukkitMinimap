@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimapa Protegido Anarquía</title>
+    <title>Minimapa Exclusivo Tripu1404</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -21,7 +21,7 @@
 <body>
 
     <div id="navbar">
-        <h2>ANARCHY MAP</h2>
+        <h2>NUKKIT MINIMAP</h2>
         <a href="?world=overworld" class="btn-dim" id="btn-overworld">Overworld</a>
         <a href="?world=nether" class="btn-dim" id="btn-nether">Nether</a>
         <a href="?world=end" class="btn-dim" id="btn-end">End</a>
@@ -30,6 +30,7 @@
     <div id="map"></div>
 
     <script>
+        // CONFIGURACIÓN ASOCIADA: Cambia TU_IP_PUBLICA por la de tu host
         const SERVER_IP = "TU_IP_PUBLICA:8080"; 
         const API_TOKEN = "MiClaveSecretaSuperSegura123!";
 
@@ -51,12 +52,9 @@
             try {
                 const response = await fetch(`http://${SERVER_IP}/api/map?world=${currentWorld}`, {
                     method: 'GET',
-                    headers: {
-                        'X-Map-Token': API_TOKEN
-                    }
+                    headers: { 'X-Map-Token': API_TOKEN }
                 });
                 const data = await response.json();
-                
                 terrainLayer.clearLayers();
 
                 data.blocks.forEach(block => {
@@ -69,7 +67,7 @@
                     }).addTo(terrainLayer);
                 });
             } catch (err) {
-                console.error("Error cargando mapa o acceso denegado por seguridad.", err);
+                console.error("Error de conexión o denegado por CORS/Token.", err);
             }
         }
 
@@ -77,19 +75,15 @@
             try {
                 const response = await fetch(`http://${SERVER_IP}/api/players`, {
                     method: 'GET',
-                    headers: {
-                        'X-Map-Token': API_TOKEN
-                    }
+                    headers: { 'X-Map-Token': API_TOKEN }
                 });
                 const players = await response.json();
-                
                 playersLayer.clearLayers();
 
                 players.forEach(player => {
                     if (player.world !== currentWorld) return;
 
                     const skinHeadUrl = `https://crafatar.com/avatars/${player.uuid}?size=32&overlay`;
-                    
                     const playerIcon = L.icon({
                         iconUrl: skinHeadUrl,
                         iconSize: [32, 32],
@@ -99,25 +93,24 @@
 
                     const marker = L.marker([player.z, player.x], { icon: playerIcon });
                     
+                    // Si las coordenadas o nombres están ocultos en config.yml llegarán vacíos
                     marker.bindPopup(`
                         <div style="color:#000; font-family:sans-serif;">
-                            <b style="font-size:14px;">${player.name}</b><br><hr style="border:0;border-top:1px solid #ccc;">
+                            <b style="font-size:14px;">${player.name || "Jugador Oculto"}</b><br><hr style="border:0;border-top:1px solid #ccc;">
                             <b>X:</b> ${player.x}<br>
                             <b>Y:</b> ${player.y}<br>
                             <b>Z:</b> ${player.z}
                         </div>
                     `);
-                    
                     playersLayer.addLayer(marker);
                 });
             } catch (err) {
-                console.log("No se pudieron verificar los datos de posicionamiento.");
+                console.log("No autorizado.");
             }
         }
 
         loadTerrain();
         updatePlayers();
-
         setInterval(updatePlayers, 2000);
         setInterval(loadTerrain, 30000);
     </script>
